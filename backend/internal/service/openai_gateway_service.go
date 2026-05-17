@@ -2011,7 +2011,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	if groupKey := getAPIKeyFromContext(c); groupKey != nil && groupKey.Group != nil && groupKey.Group.CodexCLIOnly {
 		ua := c.GetHeader("User-Agent")
 		originator := c.GetHeader("originator")
-		if !openai.IsCodexOfficialClientByHeaders(ua, originator) && !(s.cfg != nil && s.cfg.Gateway.ForceCodexCLI) {
+		if !openai.IsCodexOfficialClientByHeaders(ua, originator) && (s.cfg == nil || !s.cfg.Gateway.ForceCodexCLI) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": gin.H{
 					"type":    "permission_error",

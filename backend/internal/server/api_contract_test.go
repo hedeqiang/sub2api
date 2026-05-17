@@ -332,6 +332,7 @@ func TestAPIContracts(t *testing.T) {
 						"image_rate_independent": false,
 						"image_rate_multiplier": 0,
 						"claude_code_only": false,
+						"codex_cli_only": false,
 						"allow_messages_dispatch": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
