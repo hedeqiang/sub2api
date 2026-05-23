@@ -9,6 +9,95 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetLarkNotificationConfig returns Ops Lark (Feishu) notification config (DB-backed).
+// GET /api/v1/admin/ops/lark-notification/config
+func (h *OpsHandler) GetLarkNotificationConfig(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	cfg, err := h.opsService.GetLarkNotificationConfig(c.Request.Context())
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to get Lark notification config")
+		return
+	}
+	response.Success(c, cfg)
+}
+
+// UpdateLarkNotificationConfig updates Ops Lark notification config (DB-backed).
+// PUT /api/v1/admin/ops/lark-notification/config
+func (h *OpsHandler) UpdateLarkNotificationConfig(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	var req service.OpsLarkNotificationConfigUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	updated, err := h.opsService.UpdateLarkNotificationConfig(c.Request.Context(), &req)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, updated)
+}
+
+// TestLarkNotification sends a test message to verify Lark connectivity.
+// POST /api/v1/admin/ops/lark-notification/test
+//
+// If the request body contains a valid LarkNotificationConfig the handler uses
+// that config directly (useful for testing before saving). Otherwise it falls
+// back to the config already saved in the database.
+func (h *OpsHandler) TestLarkNotification(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	// Try to parse an inline config from the request body (preview-test before save).
+	var inlineCfg service.OpsLarkNotificationConfig
+	hasinline := c.ShouldBindJSON(&inlineCfg) == nil && (inlineCfg.WebhookURL != "" || inlineCfg.AppID != "")
+
+	var cfg *service.OpsLarkNotificationConfig
+	if hasinline {
+		// Override enabled so the test always runs regardless of the toggle value.
+		inlineCfg.Enabled = true
+		cfg = &inlineCfg
+	} else {
+		loaded, err := h.opsService.GetLarkNotificationConfig(c.Request.Context())
+		if err != nil || loaded == nil {
+			response.Error(c, http.StatusInternalServerError, "Failed to get Lark config")
+			return
+		}
+		loaded.Enabled = true // force-enable for test
+		cfg = loaded
+	}
+
+	larkSvc := service.NewLarkService(nil)
+	if err := larkSvc.SendTestMessage(c.Request.Context(), cfg, "Test message from sub2api ops dashboard."); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, map[string]string{"status": "ok"})
+}
+
 // GetEmailNotificationConfig returns Ops email notification config (DB-backed).
 // GET /api/v1/admin/ops/email-notification/config
 func (h *OpsHandler) GetEmailNotificationConfig(c *gin.Context) {

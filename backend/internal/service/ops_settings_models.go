@@ -116,3 +116,48 @@ type OpsDataRetentionSettings struct {
 type OpsAggregationSettings struct {
 	AggregationEnabled bool `json:"aggregation_enabled"`
 }
+
+// OpsLarkNotificationConfig stores Lark (Feishu) notification settings.
+type OpsLarkNotificationConfig struct {
+	// Enabled is the global switch for Lark notifications.
+	Enabled bool `json:"enabled"`
+
+	// Mode is either "webhook" (default) or "app".
+	Mode string `json:"mode"`
+
+	// WebhookURL is the custom bot webhook URL (used when Mode == "webhook").
+	WebhookURL string `json:"webhook_url"`
+
+	// AppID is the Lark app ID (used when Mode == "app").
+	AppID string `json:"app_id"`
+
+	// AppSecret is the Lark app secret (used when Mode == "app").
+	AppSecret string `json:"app_secret"`
+
+	// ReceiveID is the chat_id or open_id to send messages to (used when Mode == "app").
+	ReceiveID string `json:"receive_id"`
+
+	// ReceiveIDType is "chat_id" | "open_id" | "user_id" | "union_id" (default "chat_id").
+	ReceiveIDType string `json:"receive_id_type"`
+
+	// Alert controls which alerts are pushed to Lark.
+	Alert OpsLarkAlertConfig `json:"alert"`
+}
+
+// OpsLarkAlertConfig controls ops alert push behavior.
+type OpsLarkAlertConfig struct {
+	Enabled     bool   `json:"enabled"`
+	MinSeverity string `json:"min_severity"`
+}
+
+// OpsLarkNotificationConfigUpdateRequest supports partial updates.
+type OpsLarkNotificationConfigUpdateRequest struct {
+	Enabled       *bool              `json:"enabled"`
+	Mode          *string            `json:"mode"`
+	WebhookURL    *string            `json:"webhook_url"`
+	AppID         *string            `json:"app_id"`
+	AppSecret     *string            `json:"app_secret"`
+	ReceiveID     *string            `json:"receive_id"`
+	ReceiveIDType *string            `json:"receive_id_type"`
+	Alert         *OpsLarkAlertConfig `json:"alert"`
+}

@@ -624,6 +624,18 @@ func (r *opsRepository) UpdateAlertEventEmailSent(ctx context.Context, eventID i
 	return err
 }
 
+func (r *opsRepository) UpdateAlertEventLarkSent(ctx context.Context, eventID int64, larkSent bool) error {
+	if r == nil || r.db == nil {
+		return fmt.Errorf("nil ops repository")
+	}
+	if eventID <= 0 {
+		return fmt.Errorf("invalid event id")
+	}
+
+	_, err := r.db.ExecContext(ctx, "UPDATE ops_alert_events SET lark_sent = $2 WHERE id = $1", eventID, larkSent)
+	return err
+}
+
 type opsAlertEventRow interface {
 	Scan(dest ...any) error
 }

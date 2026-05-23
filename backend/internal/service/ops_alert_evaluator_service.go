@@ -35,6 +35,7 @@ type OpsAlertEvaluatorService struct {
 	opsService   *OpsService
 	opsRepo      OpsRepository
 	emailService *EmailService
+	larkService  *LarkService
 
 	redisClient *redis.Client
 	cfg         *config.Config
@@ -49,6 +50,7 @@ type OpsAlertEvaluatorService struct {
 	ruleStates map[int64]*opsAlertRuleState
 
 	emailLimiter *slidingWindowLimiter
+	larkLimiter  *slidingWindowLimiter
 
 	skipLogMu sync.Mutex
 	skipLogAt time.Time
@@ -65,6 +67,7 @@ func NewOpsAlertEvaluatorService(
 	opsService *OpsService,
 	opsRepo OpsRepository,
 	emailService *EmailService,
+	larkService *LarkService,
 	redisClient *redis.Client,
 	cfg *config.Config,
 ) *OpsAlertEvaluatorService {
@@ -72,11 +75,13 @@ func NewOpsAlertEvaluatorService(
 		opsService:   opsService,
 		opsRepo:      opsRepo,
 		emailService: emailService,
+		larkService:  larkService,
 		redisClient:  redisClient,
 		cfg:          cfg,
 		instanceID:   uuid.NewString(),
 		ruleStates:   map[int64]*opsAlertRuleState{},
 		emailLimiter: newSlidingWindowLimiter(0, time.Hour),
+		larkLimiter:  newSlidingWindowLimiter(0, time.Hour),
 	}
 }
 
@@ -196,6 +201,7 @@ func (s *OpsAlertEvaluatorService) evaluateOnce(interval time.Duration) {
 	eventsCreated := 0
 	eventsResolved := 0
 	emailsSent := 0
+	larkSent := 0
 
 	now := time.Now().UTC()
 	safeEnd := now.Truncate(time.Minute)
@@ -292,6 +298,9 @@ func (s *OpsAlertEvaluatorService) evaluateOnce(interval time.Duration) {
 				if s.maybeSendAlertEmail(ctx, runtimeCfg, rule, created) {
 					emailsSent++
 				}
+				if s.maybeSendLarkAlert(ctx, rule, created) {
+					larkSent++
+				}
 			}
 			continue
 		}
@@ -307,7 +316,7 @@ func (s *OpsAlertEvaluatorService) evaluateOnce(interval time.Duration) {
 		}
 	}
 
-	result := truncateString(fmt.Sprintf("rules=%d enabled=%d evaluated=%d created=%d resolved=%d emails_sent=%d", rulesTotal, rulesEnabled, rulesEvaluated, eventsCreated, eventsResolved, emailsSent), 2048)
+	result := truncateString(fmt.Sprintf("rules=%d enabled=%d evaluated=%d created=%d resolved=%d emails_sent=%d lark_sent=%d", rulesTotal, rulesEnabled, rulesEvaluated, eventsCreated, eventsResolved, emailsSent, larkSent), 2048)
 	s.recordHeartbeatSuccess(runAt, time.Since(startedAt), result)
 }
 
@@ -1026,6 +1035,37 @@ func computeGroupAvailableRatio(group *GroupAvailability) float64 {
 		return 0
 	}
 	return (float64(group.AvailableCount) / float64(group.TotalAccounts)) * 100
+}
+
+func (s *OpsAlertEvaluatorService) maybeSendLarkAlert(ctx context.Context, rule *OpsAlertRule, event *OpsAlertEvent) bool {
+	if s == nil || s.larkService == nil || s.opsService == nil || event == nil || rule == nil {
+		return false
+	}
+	if event.LarkSent {
+		return false
+	}
+	if !rule.NotifyLark {
+		return false
+	}
+
+	larkCfg, err := s.opsService.GetLarkNotificationConfig(ctx)
+	if err != nil || larkCfg == nil || !larkCfg.Enabled || !larkCfg.Alert.Enabled {
+		return false
+	}
+
+	if !shouldSendOpsAlertEmailByMinSeverity(strings.TrimSpace(larkCfg.Alert.MinSeverity), strings.TrimSpace(rule.Severity)) {
+		return false
+	}
+
+	s.larkLimiter.SetLimit(0) // no hard cap; can tune later via config
+
+	if err := s.larkService.SendAlertCard(ctx, larkCfg, rule, event); err != nil {
+		logger.LegacyPrintf("service.ops_alert_evaluator", "[OpsAlertEvaluator] lark send failed (event=%d): %v", event.ID, err)
+		return false
+	}
+
+	_ = s.opsRepo.UpdateAlertEventLarkSent(context.Background(), event.ID, true)
+	return true
 }
 
 // countAccountsByCondition counts accounts that satisfy the given condition.

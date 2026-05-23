@@ -144,6 +144,11 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/email-notification/config", h.Admin.Ops.GetEmailNotificationConfig)
 		ops.PUT("/email-notification/config", h.Admin.Ops.UpdateEmailNotificationConfig)
 
+		// Lark (Feishu) notification config (DB-backed)
+		ops.GET("/lark-notification/config", h.Admin.Ops.GetLarkNotificationConfig)
+		ops.PUT("/lark-notification/config", h.Admin.Ops.UpdateLarkNotificationConfig)
+		ops.POST("/lark-notification/test", h.Admin.Ops.TestLarkNotification)
+
 		// Runtime settings (DB-backed)
 		runtime := ops.Group("/runtime")
 		{

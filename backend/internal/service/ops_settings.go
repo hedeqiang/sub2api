@@ -575,3 +575,147 @@ func (s *OpsService) UpdateMetricThresholds(ctx context.Context, cfg *OpsMetricT
 	_ = json.Unmarshal(raw, updated)
 	return updated, nil
 }
+
+// =========================
+// Lark notification config
+// =========================
+
+func defaultOpsLarkNotificationConfig() *OpsLarkNotificationConfig {
+	return &OpsLarkNotificationConfig{
+		Enabled:       false,
+		Mode:          "webhook",
+		WebhookURL:    "",
+		AppID:         "",
+		AppSecret:     "",
+		ReceiveID:     "",
+		ReceiveIDType: "chat_id",
+		Alert: OpsLarkAlertConfig{
+			Enabled:     true,
+			MinSeverity: "",
+		},
+	}
+}
+
+func normalizeOpsLarkNotificationConfig(cfg *OpsLarkNotificationConfig) {
+	if cfg == nil {
+		return
+	}
+	cfg.Mode = strings.TrimSpace(cfg.Mode)
+	if cfg.Mode == "" {
+		cfg.Mode = "webhook"
+	}
+	cfg.WebhookURL = strings.TrimSpace(cfg.WebhookURL)
+	cfg.AppID = strings.TrimSpace(cfg.AppID)
+	cfg.AppSecret = strings.TrimSpace(cfg.AppSecret)
+	cfg.ReceiveID = strings.TrimSpace(cfg.ReceiveID)
+	cfg.ReceiveIDType = strings.TrimSpace(cfg.ReceiveIDType)
+	if cfg.ReceiveIDType == "" {
+		cfg.ReceiveIDType = "chat_id"
+	}
+	cfg.Alert.MinSeverity = strings.TrimSpace(cfg.Alert.MinSeverity)
+}
+
+func validateOpsLarkNotificationConfig(cfg *OpsLarkNotificationConfig) error {
+	if cfg == nil {
+		return errors.New("invalid config")
+	}
+	switch strings.TrimSpace(cfg.Mode) {
+	case "webhook", "app", "":
+	default:
+		return errors.New("lark mode must be 'webhook' or 'app'")
+	}
+	switch strings.TrimSpace(cfg.Alert.MinSeverity) {
+	case "", "critical", "warning", "info":
+	default:
+		return errors.New("lark alert.min_severity must be one of: critical, warning, info, or empty")
+	}
+	return nil
+}
+
+func (s *OpsService) GetLarkNotificationConfig(ctx context.Context) (*OpsLarkNotificationConfig, error) {
+	defaultCfg := defaultOpsLarkNotificationConfig()
+	if s == nil || s.settingRepo == nil {
+		return defaultCfg, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyOpsLarkNotificationConfig)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			if b, mErr := json.Marshal(defaultCfg); mErr == nil {
+				_ = s.settingRepo.Set(ctx, SettingKeyOpsLarkNotificationConfig, string(b))
+			}
+			return defaultCfg, nil
+		}
+		return nil, err
+	}
+
+	cfg := defaultOpsLarkNotificationConfig()
+	if err := json.Unmarshal([]byte(raw), cfg); err != nil {
+		return defaultCfg, nil
+	}
+	normalizeOpsLarkNotificationConfig(cfg)
+	return cfg, nil
+}
+
+func (s *OpsService) UpdateLarkNotificationConfig(ctx context.Context, req *OpsLarkNotificationConfigUpdateRequest) (*OpsLarkNotificationConfig, error) {
+	if s == nil || s.settingRepo == nil {
+		return nil, errors.New("setting repository not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if req == nil {
+		return nil, errors.New("invalid request")
+	}
+
+	cfg, err := s.GetLarkNotificationConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Enabled != nil {
+		cfg.Enabled = *req.Enabled
+	}
+	if req.Mode != nil {
+		cfg.Mode = strings.TrimSpace(*req.Mode)
+	}
+	if req.WebhookURL != nil {
+		cfg.WebhookURL = strings.TrimSpace(*req.WebhookURL)
+	}
+	if req.AppID != nil {
+		cfg.AppID = strings.TrimSpace(*req.AppID)
+	}
+	if req.AppSecret != nil {
+		cfg.AppSecret = strings.TrimSpace(*req.AppSecret)
+	}
+	if req.ReceiveID != nil {
+		cfg.ReceiveID = strings.TrimSpace(*req.ReceiveID)
+	}
+	if req.ReceiveIDType != nil {
+		cfg.ReceiveIDType = strings.TrimSpace(*req.ReceiveIDType)
+	}
+	if req.Alert != nil {
+		cfg.Alert.Enabled = req.Alert.Enabled
+		cfg.Alert.MinSeverity = strings.TrimSpace(req.Alert.MinSeverity)
+	}
+
+	if err := validateOpsLarkNotificationConfig(cfg); err != nil {
+		return nil, err
+	}
+	normalizeOpsLarkNotificationConfig(cfg)
+
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settingRepo.Set(ctx, SettingKeyOpsLarkNotificationConfig, string(raw)); err != nil {
+		return nil, err
+	}
+
+	updated := defaultOpsLarkNotificationConfig()
+	_ = json.Unmarshal(raw, updated)
+	return updated, nil
+}

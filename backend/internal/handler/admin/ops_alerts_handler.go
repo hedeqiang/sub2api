@@ -74,6 +74,7 @@ type opsAlertRuleValidatedInput struct {
 
 	Enabled     bool
 	NotifyEmail bool
+	NotifyLark  bool
 
 	WindowProvided    bool
 	SustainedProvided bool
@@ -193,6 +194,12 @@ func validateOpsAlertRulePayload(raw map[string]json.RawMessage) (*opsAlertRuleV
 		validated.NotifyEmail = true
 	}
 
+	if v, ok := raw["notify_lark"]; ok {
+		if err := json.Unmarshal(v, &validated.NotifyLark); err != nil {
+			return nil, fmt.Errorf("notify_lark must be a boolean")
+		}
+	}
+
 	if v, ok := raw["window_minutes"]; ok {
 		validated.WindowProvided = true
 		if err := json.Unmarshal(v, &validated.WindowMinutes); err != nil {
@@ -293,6 +300,7 @@ func (h *OpsHandler) CreateAlertRule(c *gin.Context) {
 	rule.Severity = validated.Severity
 	rule.Enabled = validated.Enabled
 	rule.NotifyEmail = validated.NotifyEmail
+	rule.NotifyLark = validated.NotifyLark
 
 	created, err := h.opsService.CreateAlertRule(c.Request.Context(), &rule)
 	if err != nil {
@@ -348,6 +356,7 @@ func (h *OpsHandler) UpdateAlertRule(c *gin.Context) {
 	rule.Severity = validated.Severity
 	rule.Enabled = validated.Enabled
 	rule.NotifyEmail = validated.NotifyEmail
+	rule.NotifyLark = validated.NotifyLark
 
 	updated, err := h.opsService.UpdateAlertRule(c.Request.Context(), &rule)
 	if err != nil {

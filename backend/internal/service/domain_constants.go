@@ -320,6 +320,9 @@ const (
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
 
+	// SettingKeyOpsLarkNotificationConfig stores JSON config for Lark (Feishu) notification settings.
+	SettingKeyOpsLarkNotificationConfig = "ops_lark_notification_config"
+
 	// =========================
 	// Channel Monitor (渠道监控)
 	// =========================
