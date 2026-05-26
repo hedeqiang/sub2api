@@ -14,37 +14,35 @@ import (
 )
 
 const (
-	larkWebhookBase      = "https://open.feishu.cn/open-apis/bot/v2/hook/"
-	larkAPIBase          = "https://open.feishu.cn/open-apis"
-	larkTokenURL         = "/auth/v3/tenant_access_token/internal"
-	larkSendMsgURL       = "/im/v1/messages"
-	larkHTTPTimeout      = 10 * time.Second
-	larkTokenCacheTTL    = 110 * time.Minute // token TTL is 2h, refresh 10min early
+	larkWebhookBase   = "https://open.feishu.cn/open-apis/bot/v2/hook/"
+	larkAPIBase       = "https://open.feishu.cn/open-apis"
+	larkTokenURL      = "/auth/v3/tenant_access_token/internal"
+	larkSendMsgURL    = "/im/v1/messages"
+	larkHTTPTimeout   = 10 * time.Second
+	larkTokenCacheTTL = 110 * time.Minute // token TTL is 2h, refresh 10min early
 )
 
 // LarkMsgType represents supported Lark message types.
 type LarkMsgType string
 
 const (
-	LarkMsgTypeText      LarkMsgType = "text"
-	LarkMsgTypePost      LarkMsgType = "post"       // rich text / 富文本
-	LarkMsgTypeCard      LarkMsgType = "interactive" // card / 卡片
+	LarkMsgTypeText LarkMsgType = "text"
+	LarkMsgTypePost LarkMsgType = "post"        // rich text / 富文本
+	LarkMsgTypeCard LarkMsgType = "interactive" // card / 卡片
 )
 
 // LarkService sends notifications to Lark (Feishu) via webhook or app API.
 type LarkService struct {
-	settingRepo SettingRepository
-	httpClient  *http.Client
+	httpClient *http.Client
 
 	mu             sync.Mutex
 	cachedToken    string
 	tokenExpiresAt time.Time
 }
 
-func NewLarkService(settingRepo SettingRepository) *LarkService {
+func NewLarkService() *LarkService {
 	return &LarkService{
-		settingRepo: settingRepo,
-		httpClient:  &http.Client{Timeout: larkHTTPTimeout},
+		httpClient: &http.Client{Timeout: larkHTTPTimeout},
 	}
 }
 
@@ -129,7 +127,7 @@ func (s *LarkService) sendViaWebhook(ctx context.Context, cfg *OpsLarkNotificati
 	if err != nil {
 		return fmt.Errorf("lark: send webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode >= 400 {
@@ -214,7 +212,7 @@ func (s *LarkService) sendViaApp(ctx context.Context, cfg *OpsLarkNotificationCo
 	if err != nil {
 		return fmt.Errorf("lark: send app message: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode >= 400 {
@@ -256,7 +254,7 @@ func (s *LarkService) getTenantAccessToken(ctx context.Context, appID, appSecret
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	var tokenResp struct {

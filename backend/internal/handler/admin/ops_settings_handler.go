@@ -90,7 +90,7 @@ func (h *OpsHandler) TestLarkNotification(c *gin.Context) {
 		cfg = loaded
 	}
 
-	larkSvc := service.NewLarkService(nil)
+	larkSvc := service.NewLarkService()
 	if err := larkSvc.SendTestMessage(c.Request.Context(), cfg, "Test message from sub2api ops dashboard."); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return

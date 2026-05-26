@@ -152,12 +152,12 @@ type OpsLarkAlertConfig struct {
 
 // OpsLarkNotificationConfigUpdateRequest supports partial updates.
 type OpsLarkNotificationConfigUpdateRequest struct {
-	Enabled       *bool              `json:"enabled"`
-	Mode          *string            `json:"mode"`
-	WebhookURL    *string            `json:"webhook_url"`
-	AppID         *string            `json:"app_id"`
-	AppSecret     *string            `json:"app_secret"`
-	ReceiveID     *string            `json:"receive_id"`
-	ReceiveIDType *string            `json:"receive_id_type"`
+	Enabled       *bool               `json:"enabled"`
+	Mode          *string             `json:"mode"`
+	WebhookURL    *string             `json:"webhook_url"`
+	AppID         *string             `json:"app_id"`
+	AppSecret     *string             `json:"app_secret"`
+	ReceiveID     *string             `json:"receive_id"`
+	ReceiveIDType *string             `json:"receive_id_type"`
 	Alert         *OpsLarkAlertConfig `json:"alert"`
 }
