@@ -5004,6 +5004,7 @@ export default {
           upstreamErrors: '上游错误列表'
         },
         upstreamEvent: {
+          user: '用户',
           account: '账号',
           status: '状态码',
           requestId: '请求ID'

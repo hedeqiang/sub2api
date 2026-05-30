@@ -129,22 +129,23 @@
 
               <!-- User / Account -->
               <td class="px-4 py-2">
-                <template v-if="isUpstreamRow(log)">
-                  <el-tooltip v-if="log.account_id" :content="t('admin.ops.errorLog.accountId') + ' ' + log.account_id" placement="top" :show-after="500">
-                    <span class="max-w-[100px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
-                      {{ log.account_name || '-' }}
-                    </span>
-                  </el-tooltip>
-                  <span v-else class="text-xs text-gray-400">-</span>
-                </template>
-                <template v-else>
-                  <el-tooltip v-if="log.user_id" :content="t('admin.ops.errorLog.userId') + ' ' + log.user_id" placement="top" :show-after="500">
-                    <span class="max-w-[100px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
-                      {{ log.user_email || '-' }}
-                    </span>
-                  </el-tooltip>
-                  <span v-else class="text-xs text-gray-400">-</span>
-                </template>
+                <div class="flex flex-col gap-0.5">
+                  <template v-if="log.user_id">
+                    <el-tooltip :content="t('admin.ops.errorLog.userId') + ' ' + log.user_id" placement="top" :show-after="500">
+                      <span class="max-w-[120px] truncate text-xs font-medium text-gray-900 dark:text-gray-200">
+                        {{ log.user_email || String(log.user_id) }}
+                      </span>
+                    </el-tooltip>
+                  </template>
+                  <template v-if="log.account_id">
+                    <el-tooltip :content="t('admin.ops.errorLog.accountId') + ' ' + log.account_id" placement="top" :show-after="500">
+                      <span class="max-w-[120px] truncate text-[10px] text-gray-500 dark:text-gray-400">
+                        {{ log.account_name || String(log.account_id) }}
+                      </span>
+                    </el-tooltip>
+                  </template>
+                  <span v-if="!log.user_id && !log.account_id" class="text-xs text-gray-400">-</span>
+                </div>
               </td>
 
               <!-- Status -->

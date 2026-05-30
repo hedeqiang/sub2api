@@ -29,16 +29,16 @@
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
-          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">
-            {{ isUpstreamError(detail) ? t('admin.ops.errorDetail.account') : t('admin.ops.errorDetail.user') }}
-          </div>
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.user') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-            <template v-if="isUpstreamError(detail)">
-              {{ detail.account_name || (detail.account_id != null ? String(detail.account_id) : '—') }}
-            </template>
-            <template v-else>
-              {{ detail.user_email || (detail.user_id != null ? String(detail.user_id) : '—') }}
-            </template>
+            {{ detail.user_email || (detail.user_id != null ? String(detail.user_id) : '—') }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.account') }}</div>
+          <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.account_name || (detail.account_id != null ? String(detail.account_id) : '—') }}
           </div>
         </div>
 
@@ -172,6 +172,14 @@
                 <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.requestId') }}:</span>
                 <span class="ml-1 font-mono">{{ ev.request_id || ev.client_request_id || '—' }}</span>
               </div>
+              <div v-if="ev.user_id">
+                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.user') }}:</span>
+                <span class="ml-1">{{ ev.user_email || String(ev.user_id) }}</span>
+              </div>
+              <div v-if="ev.account_id">
+                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.account') }}:</span>
+                <span class="ml-1">{{ ev.account_name || String(ev.account_id) }}</span>
+              </div>
             </div>
 
             <div v-if="ev.message" class="mt-3 break-words text-sm font-medium text-gray-900 dark:text-white">{{ ev.message }}</div>
@@ -234,12 +242,6 @@ const title = computed(() => {
 
 const emptyText = computed(() => t('admin.ops.errorDetail.noErrorSelected'))
 
-function isUpstreamError(d: OpsErrorDetail | null): boolean {
-  if (!d) return false
-  const phase = String(d.phase || '').toLowerCase()
-  const owner = String(d.error_owner || '').toLowerCase()
-  return phase === 'upstream' && owner === 'provider'
-}
 
 function formatRequestTypeLabel(type: number | null | undefined): string {
   switch (type) {

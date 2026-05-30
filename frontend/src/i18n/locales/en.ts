@@ -4844,6 +4844,7 @@ export default {
           upstreamErrors: 'Upstream Errors'
         },
         upstreamEvent: {
+          user: 'User',
           account: 'Account',
           status: 'Status',
           requestId: 'Request ID'
