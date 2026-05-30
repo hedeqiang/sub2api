@@ -817,6 +817,11 @@ export default {
     rateLimit5h: '5小时限额 (USD)',
     rateLimit1d: '日限额 (USD)',
     rateLimit7d: '7天限额 (USD)',
+    rateLimitLabel5h: '5小时',
+    rateLimitLabel1d: '日',
+    rateLimitLabel7d: '7天',
+    rateLimitDailyExhausted: '日限额已用完',
+    rateLimitWeeklyExhausted: '周限额已用完',
     rateLimitHint: '设置此密钥在指定时间窗口内的最大消费额。0 = 无限制。',
     rateLimitUsage: '速率限制用量',
     resetRateLimitUsage: '重置速率限制用量',
@@ -4922,7 +4927,9 @@ export default {
         commonErrors: {
           contextDeadlineExceeded: '请求超时',
           connectionRefused: '连接被拒绝',
-          rateLimit: '触发限流'
+          rateLimit: '触发限流',
+          dailyLimitExhausted: 'API Key 日限额已用完',
+          weeklyLimitExhausted: 'API Key 周限额已用完'
         },
         time: '时间',
         type: '类型',

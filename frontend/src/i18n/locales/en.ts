@@ -813,6 +813,11 @@ export default {
     rateLimit5h: '5-Hour Limit (USD)',
     rateLimit1d: 'Daily Limit (USD)',
     rateLimit7d: '7-Day Limit (USD)',
+    rateLimitLabel5h: '5h',
+    rateLimitLabel1d: 'Day',
+    rateLimitLabel7d: '7d',
+    rateLimitDailyExhausted: 'Daily limit exhausted',
+    rateLimitWeeklyExhausted: 'Weekly limit exhausted',
     rateLimitHint: 'Set the maximum spending for this key within each time window. 0 = unlimited.',
     rateLimitUsage: 'Rate Limit Usage',
     resetRateLimitUsage: 'Reset Rate Limit Usage',
@@ -4762,7 +4767,9 @@ export default {
         commonErrors: {
           contextDeadlineExceeded: 'context deadline exceeded',
           connectionRefused: 'connection refused',
-          rateLimit: 'rate limit'
+          rateLimit: 'rate limit',
+          dailyLimitExhausted: 'API Key daily limit exhausted',
+          weeklyLimitExhausted: 'API Key weekly limit exhausted'
         },
         time: 'Time',
         type: 'Type',

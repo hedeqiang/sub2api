@@ -178,6 +178,17 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
 				return
 			}
+			// 日/周限额检查（使用 auth 缓存快照中的使用量，可能在缓存 TTL 内存在轻微滞后）。
+			// billing 服务在每次请求前通过 Redis 做精确检查，此处提供中间件级快速拒绝，
+			// 与总额度 IsQuotaExhausted 保持一致的检查粒度。
+			if apiKey.RateLimit1d > 0 && apiKey.EffectiveUsage1d() >= apiKey.RateLimit1d {
+				AbortWithError(c, 429, "API_KEY_RATE_1D_EXCEEDED", "API key 日限额已用完")
+				return
+			}
+			if apiKey.RateLimit7d > 0 && apiKey.EffectiveUsage7d() >= apiKey.RateLimit7d {
+				AbortWithError(c, 429, "API_KEY_RATE_7D_EXCEEDED", "API key 周限额已用完")
+				return
+			}
 
 			// 订阅模式：验证订阅限额
 			if subscription != nil {

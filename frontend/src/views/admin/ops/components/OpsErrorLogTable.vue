@@ -328,6 +328,8 @@ function formatSmartMessage(msg: string): string {
 
   if (msg.includes('context deadline exceeded')) return t('admin.ops.errorLog.commonErrors.contextDeadlineExceeded')
   if (msg.includes('connection refused')) return t('admin.ops.errorLog.commonErrors.connectionRefused')
+  if (msg.includes('API_KEY_RATE_1D_EXCEEDED') || msg.includes('日限额已用完')) return t('admin.ops.errorLog.commonErrors.dailyLimitExhausted')
+  if (msg.includes('API_KEY_RATE_7D_EXCEEDED') || msg.includes('周限额已用完') || msg.includes('7天限额已用完')) return t('admin.ops.errorLog.commonErrors.weeklyLimitExhausted')
   if (msg.toLowerCase().includes('rate limit')) return t('admin.ops.errorLog.commonErrors.rateLimit')
 
   return msg.length > 200 ? msg.substring(0, 200) + '...' : msg

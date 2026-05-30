@@ -22,10 +22,19 @@ type APIKeyAuthSnapshot struct {
 	// Expiration field for API Key expiration feature
 	ExpiresAt *time.Time `json:"expires_at,omitempty"` // Expiration time (nil = never expires)
 
-	// Rate limit configuration (only limits, not usage - usage read from Redis at check time)
-	RateLimit5h float64 `json:"rate_limit_5h"`
-	RateLimit1d float64 `json:"rate_limit_1d"`
-	RateLimit7d float64 `json:"rate_limit_7d"`
+	// Rate limit configuration (limits + current window usage snapshot)
+	// Usage fields are loaded at auth-cache-build time and may be up to the cache TTL stale.
+	// The billing service performs an authoritative fresh check (Redis/DB) on every request.
+	// Having usage here allows the auth middleware to provide a fast-path rejection consistent
+	// with how IsQuotaExhausted works, closing the gap where daily/weekly limits had no
+	// middleware-level enforcement.
+	RateLimit5h   float64    `json:"rate_limit_5h"`
+	RateLimit1d   float64    `json:"rate_limit_1d"`
+	RateLimit7d   float64    `json:"rate_limit_7d"`
+	Usage1d       float64    `json:"usage_1d"`
+	Window1dStart *time.Time `json:"window_1d_start,omitempty"`
+	Usage7d       float64    `json:"usage_7d"`
+	Window7dStart *time.Time `json:"window_7d_start,omitempty"`
 }
 
 // APIKeyAuthUserSnapshot 用户快照

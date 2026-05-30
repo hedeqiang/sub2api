@@ -135,6 +135,14 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldRateLimit5h,
 			apikey.FieldRateLimit1d,
 			apikey.FieldRateLimit7d,
+			// Usage fields are included so the auth snapshot can give the middleware
+			// a fast-path check for daily/weekly limits (consistent with IsQuotaExhausted).
+			// Values may be up to the auth-cache TTL stale; the billing service always
+			// performs an authoritative fresh check before allowing a request.
+			apikey.FieldUsage1d,
+			apikey.FieldWindow1dStart,
+			apikey.FieldUsage7d,
+			apikey.FieldWindow7dStart,
 		).
 		WithUser(func(q *dbent.UserQuery) {
 			q.Select(

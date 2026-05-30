@@ -181,7 +181,7 @@
               <!-- 5h window -->
               <div v-if="row.rate_limit_5h > 0">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="text-gray-500 dark:text-gray-400">5h</span>
+                  <span class="text-gray-500 dark:text-gray-400">{{ t('keys.rateLimitLabel5h') }}</span>
                   <span :class="[
                     'font-medium tabular-nums',
                     row.usage_5h >= row.rate_limit_5h ? 'text-red-500' :
@@ -209,7 +209,7 @@
               <!-- 1d window -->
               <div v-if="row.rate_limit_1d > 0">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="text-gray-500 dark:text-gray-400">1d</span>
+                  <span class="text-gray-500 dark:text-gray-400">{{ t('keys.rateLimitLabel1d') }}</span>
                   <span :class="[
                     'font-medium tabular-nums',
                     row.usage_1d >= row.rate_limit_1d ? 'text-red-500' :
@@ -237,7 +237,7 @@
               <!-- 7d window -->
               <div v-if="row.rate_limit_7d > 0">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="text-gray-500 dark:text-gray-400">7d</span>
+                  <span class="text-gray-500 dark:text-gray-400">{{ t('keys.rateLimitLabel7d') }}</span>
                   <span :class="[
                     'font-medium tabular-nums',
                     row.usage_7d >= row.rate_limit_7d ? 'text-red-500' :
@@ -286,16 +286,30 @@
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noExpiration') }}</span>
           </template>
 
-          <template #cell-status="{ value }">
-            <span :class="[
-              'badge',
-              value === 'active' ? 'badge-success' :
-              value === 'quota_exhausted' ? 'badge-warning' :
-              value === 'expired' ? 'badge-danger' :
-              'badge-gray'
-            ]">
-              {{ t('keys.status.' + value) }}
-            </span>
+          <template #cell-status="{ value, row }">
+            <div class="flex flex-wrap items-center gap-1">
+              <span :class="[
+                'badge',
+                value === 'active' ? 'badge-success' :
+                value === 'quota_exhausted' ? 'badge-warning' :
+                value === 'expired' ? 'badge-danger' :
+                'badge-gray'
+              ]">
+                {{ t('keys.status.' + value) }}
+              </span>
+              <span
+                v-if="value === 'active' && row.rate_limit_1d > 0 && row.usage_1d >= row.rate_limit_1d"
+                class="badge badge-warning"
+              >
+                {{ t('keys.rateLimitDailyExhausted') }}
+              </span>
+              <span
+                v-else-if="value === 'active' && row.rate_limit_7d > 0 && row.usage_7d >= row.rate_limit_7d"
+                class="badge badge-warning"
+              >
+                {{ t('keys.rateLimitWeeklyExhausted') }}
+              </span>
+            </div>
           </template>
 
           <template #cell-last_used_at="{ value }">
