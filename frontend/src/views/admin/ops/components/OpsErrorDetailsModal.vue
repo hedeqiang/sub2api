@@ -30,6 +30,7 @@ const page = ref(1)
 const pageSize = ref(10)
 
 const q = ref('')
+const userQuery = ref('')
 const statusCode = ref<number | 'other' | null>(null)
 const phase = ref<string>('')
 const errorOwner = ref<string>('')
@@ -101,6 +102,7 @@ async function fetchErrorLogs() {
     if (typeof props.groupId === 'number' && props.groupId > 0) params.group_id = props.groupId
 
     if (q.value.trim()) params.q = q.value.trim()
+    if (userQuery.value.trim()) params.user_query = userQuery.value.trim()
     if (statusCode.value === 'other') params.status_codes_other = '1'
     else if (typeof statusCode.value === 'number') params.status_codes = String(statusCode.value)
 
@@ -127,6 +129,7 @@ async function fetchErrorLogs() {
 
   function resetFilters() {
     q.value = ''
+    userQuery.value = ''
     statusCode.value = null
     phase.value = props.errorType === 'upstream' ? 'upstream' : ''
     errorOwner.value = ''
@@ -170,6 +173,19 @@ watch(
     if (!props.show) return
     if (searchTimeout) window.clearTimeout(searchTimeout)
     searchTimeout = window.setTimeout(() => {
+      page.value = 1
+      fetchErrorLogs()
+    }, 350)
+  }
+)
+
+let userQueryTimeout: number | null = null
+watch(
+  () => userQuery.value,
+  () => {
+    if (!props.show) return
+    if (userQueryTimeout) window.clearTimeout(userQueryTimeout)
+    userQueryTimeout = window.setTimeout(() => {
       page.value = 1
       fetchErrorLogs()
     }, 350)
@@ -225,7 +241,26 @@ watch(
             <Select :model-value="errorOwner" :options="ownerSelectOptions" @update:model-value="errorOwner = String($event ?? '')" />
           </div>
 
-
+          <div class="compact-select">
+            <div class="relative group">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <svg
+                  class="h-3.5 w-3.5 text-gray-400 transition-colors group-focus-within:text-blue-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <input
+                v-model="userQuery"
+                type="text"
+                class="w-full rounded-lg border-gray-200 bg-gray-50/50 py-1.5 pl-9 pr-3 text-xs font-medium text-gray-700 transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/10 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-300 dark:focus:bg-dark-800"
+                :placeholder="t('admin.ops.errorDetails.userSearchPlaceholder')"
+              />
+            </div>
+          </div>
 
           <div class="compact-select">
             <Select :model-value="viewMode" :options="viewModeSelectOptions" @update:model-value="viewMode = $event as any" />

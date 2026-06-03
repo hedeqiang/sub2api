@@ -1098,6 +1098,7 @@ export type OpsErrorListQueryParams = {
   view?: OpsErrorListView
 
   q?: string
+  user_query?: string
   status_codes?: string
   status_codes_other?: string
 }

@@ -4828,6 +4828,7 @@ export default {
         },
         total: 'Total:',
         searchPlaceholder: 'Search request_id / client_request_id / message',
+        userSearchPlaceholder: 'Filter by user email',
       },
       // Error Detail Modal
       errorDetail: {

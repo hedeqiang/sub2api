@@ -4987,7 +4987,8 @@ export default {
           internal: '内部'
         },
         total: '总计：',
-        searchPlaceholder: '搜索 request_id / client_request_id / message'
+        searchPlaceholder: '搜索 request_id / client_request_id / message',
+        userSearchPlaceholder: '按用户邮箱筛选'
       },
       // Error Detail Modal
       errorDetail: {
