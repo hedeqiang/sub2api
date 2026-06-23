@@ -306,7 +306,7 @@ func (s *OpsAlertEvaluatorService) evaluateOnce(interval time.Duration) {
 						Platform: scopePlatform,
 						GroupID:  scopeGroupID,
 					}
-					if bd, bdErr := s.opsRepo.GetAlertErrorBreakdown(ctx, bdFilter, windowStart, windowEnd, 5); bdErr == nil && bd != nil {
+					if bd, bdErr := s.opsRepo.GetAlertErrorBreakdown(ctx, bdFilter, windowStart, windowEnd, 5, rule.MetricType); bdErr == nil && bd != nil {
 						bd.WindowMinutes = windowMinutes
 						created.Breakdown = bd
 					} else if bdErr != nil {

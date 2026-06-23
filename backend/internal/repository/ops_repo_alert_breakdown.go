@@ -15,10 +15,11 @@ const opsAlertBreakdownTimeout = 3 * time.Second
 
 // GetAlertErrorBreakdown 在 [start,end) 窗口内回查 ops_error_logs,聚合业务维度明细:
 // 窗口请求总数 / 4xx-5xx 拆分 / 平台分布 / Top 用户(含各自错误构成) / Top 错误类型 /
-// Top 上游(平台·渠道名·模型) / 样例报错。错误口径与 error_rate 一致:status_code>=400
-// 且非业务限流(NOT is_business_limited)。scope 过滤(platform/group)复用 buildErrorWhere /
+// Top 上游(平台·渠道名·模型) / 样例报错。错误口径由 metricType 决定:upstream_error_rate
+// 对齐上游错误率分子(error_owner='provider',含被重试救回的恢复行),其余按 SLA 口径
+// (status_code>=400 且非业务限流)。scope 过滤(platform/group)复用 buildErrorWhere /
 // buildUsageWhere,保证与触发该告警的指标范围一致。
-func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time, topN int) (*service.OpsAlertBreakdown, error) {
+func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time, topN int, metricType string) (*service.OpsAlertBreakdown, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("ops repository not initialized")
 	}
@@ -32,11 +33,11 @@ func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *serv
 	ctx, cancel := context.WithTimeout(ctx, opsAlertBreakdownTimeout)
 	defer cancel()
 
-	where, args, _ := buildErrorWhere(filter, start, end, 1)
-	// 追加错误率口径过滤。ops_error_logs 只记录错误,但仍按 SLA 口径排除业务限流与非 4xx/5xx。
-	where += " AND COALESCE(status_code,0) >= 400 AND COALESCE(is_business_limited,false) = false"
+	base, args, _ := buildErrorWhere(filter, start, end, 1)
+	pred := alertBreakdownErrorPredicate(metricType, "")
+	where := base + " AND " + pred // 供 TOP/样例 等子查询复用(按 metricType 口径)
 
-	bd := &service.OpsAlertBreakdown{}
+	bd := &service.OpsAlertBreakdown{MetricType: metricType}
 
 	// 1) 总错误数 + 4xx/5xx 拆分
 	totalQ := `SELECT
@@ -100,8 +101,8 @@ func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *serv
 
 	// 6) Top 上游(平台 · 渠道名 · 模型);account_id 为空表示未走到选号(客户端错误)。
 	// 与 accounts JOIN 时 created_at 列名歧义,改用带别名 e 的等价 where。
-	upWhere, upArgs, _ := buildErrorWhereAliased(filter, start, end, 1, "e")
-	upWhere += " AND COALESCE(e.status_code,0) >= 400 AND COALESCE(e.is_business_limited,false) = false"
+	upBase, upArgs, _ := buildErrorWhereAliased(filter, start, end, 1, "e")
+	upWhere := upBase + " AND " + alertBreakdownErrorPredicate(metricType, "e.")
 	upQ := `SELECT COALESCE(e.account_id,0) AS aid, COALESCE(a.name,'') AS aname, COALESCE(e.platform,'') AS pf, COALESCE(e.model,'') AS md, COUNT(*) AS c
 		FROM ops_error_logs e LEFT JOIN accounts a ON a.id = e.account_id ` + upWhere +
 		" GROUP BY aid, aname, pf, md ORDER BY c DESC LIMIT " + fmt.Sprintf("%d", topN)
