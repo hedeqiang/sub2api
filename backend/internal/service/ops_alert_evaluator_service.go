@@ -925,7 +925,11 @@ func buildOpsAlertEmailBreakdownHTML(bd *OpsAlertBreakdown) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "<hr/><h3>🔎 业务上下文（近 %d 分钟）</h3>", win)
-	fmt.Fprintf(&b, "<p>窗口请求 <b>%d</b> · 错误 <b>%d</b>（客户端 4xx %d · 上游 5xx %d）</p>", bd.WindowRequests, bd.TotalErrors, bd.Client4xx, bd.Server5xx)
+	if strings.EqualFold(strings.TrimSpace(bd.MetricType), "upstream_error_rate") {
+		fmt.Fprintf(&b, "<p>窗口请求 <b>%d</b> · 上游失败尝试 <b>%d</b>（含重试救回；上游 5xx %d · 4xx %d · 其他 %d）</p>", bd.WindowRequests, bd.TotalErrors, bd.Server5xx, bd.Client4xx, bd.OtherErrors)
+	} else {
+		fmt.Fprintf(&b, "<p>窗口请求 <b>%d</b> · 错误 <b>%d</b>（客户端 4xx %d · 上游 5xx %d）</p>", bd.WindowRequests, bd.TotalErrors, bd.Client4xx, bd.Server5xx)
+	}
 
 	if len(bd.Platforms) > 0 {
 		parts := make([]string, 0, len(bd.Platforms))

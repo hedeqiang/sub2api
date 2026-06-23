@@ -374,6 +374,9 @@ func buildAlertRichElements(rule *OpsAlertRule, event *OpsAlertEvent) []any {
 
 	// 指标色块:错误数(下方灰字=请求总数+窗口) | 指标值(下方灰字=阈值+范围)
 	errSub := fmt.Sprintf("共 %d 请求 · 近 %d 分钟", bd.WindowRequests, win)
+	if strings.EqualFold(strings.TrimSpace(bd.MetricType), "upstream_error_rate") {
+		errSub = fmt.Sprintf("共 %d 请求 · 近 %d 分钟 · 含被重试救回", bd.WindowRequests, win)
+	}
 	metricLabel := alertMetricLabel(rule)
 	metricVal := "-"
 	if event.MetricValue != nil {
@@ -389,7 +392,7 @@ func buildAlertRichElements(rule *OpsAlertRule, event *OpsAlertEvent) []any {
 		"background_style":   "grey",
 		"horizontal_spacing": "default",
 		"columns": []any{
-			alertStatColumn("错误数", fmt.Sprintf("<font color='red'>**%d**</font>", bd.TotalErrors), errSub),
+			alertStatColumn(alertErrorTileLabel(bd.MetricType), fmt.Sprintf("<font color='red'>**%d**</font>", bd.TotalErrors), errSub),
 			alertStatColumn(metricLabel, fmt.Sprintf("<font color='red'>**%s**</font>", metricVal), metricSub),
 		},
 	}
@@ -452,7 +455,11 @@ func buildAlertRichElements(rule *OpsAlertRule, event *OpsAlertEvent) []any {
 		_, _ = b.WriteString("**🛰️ 上游渠道 TOP**（平台 · 渠道 · 模型）")
 		for i, up := range bd.TopUpstreams {
 			if up.AccountID <= 0 {
-				fmt.Fprintf(&b, "\n• <font color='grey'>无上游（客户端错误，未到选号）— %d</font>", up.Count)
+				if strings.EqualFold(strings.TrimSpace(bd.MetricType), "upstream_error_rate") {
+					fmt.Fprintf(&b, "\n• <font color='grey'>未记录上游渠道 — %d</font>", up.Count)
+				} else {
+					fmt.Fprintf(&b, "\n• <font color='grey'>无上游（客户端错误，未到选号）— %d</font>", up.Count)
+				}
 				continue
 			}
 			fmt.Fprintf(&b, "\n• %s — <font color='%s'>**%d**</font>", alertUpstreamLabel(up), alertCountColor(i), up.Count)
@@ -481,6 +488,14 @@ func buildAlertRichElements(rule *OpsAlertRule, event *OpsAlertEvent) []any {
 	return elements
 }
 
+// alertErrorTileLabel 错误数色块标题:upstream 口径计的是"被重试救回的上游失败尝试",非最终错误。
+func alertErrorTileLabel(metricType string) string {
+	if strings.EqualFold(strings.TrimSpace(metricType), "upstream_error_rate") {
+		return "上游失败尝试"
+	}
+	return "错误数"
+}
+
 // alertStatColumn 构造一个指标色块列(标题 / 大号值 / 灰色副说明,居中)。
 func alertStatColumn(title, value, sub string) map[string]any {
 	content := fmt.Sprintf("**%s**\n%s", title, value)
@@ -493,9 +508,18 @@ func alertStatColumn(title, value, sub string) map[string]any {
 	}
 }
 
-// alertInsightLine 根据 4xx/5xx 拆分给出归因提示。
+// alertInsightLine 根据 4xx/5xx 拆分给出归因提示。upstream 口径以上游可用性为主,并展示"其他"余量。
 func alertInsightLine(bd *OpsAlertBreakdown) string {
-	if bd == nil || (bd.Client4xx == 0 && bd.Server5xx == 0) {
+	if bd == nil {
+		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(bd.MetricType), "upstream_error_rate") {
+		if bd.TotalErrors == 0 {
+			return ""
+		}
+		return fmt.Sprintf("⚠️ 上游 `5xx` <font color='red'>**%d**</font> · `4xx` <font color='orange'>**%d**</font> · 其他 <font color='grey'>**%d**</font>（含无明确上游状态码的救回尝试）—— 关注上游可用性。", bd.Server5xx, bd.Client4xx, bd.OtherErrors)
+	}
+	if bd.Client4xx == 0 && bd.Server5xx == 0 {
 		return ""
 	}
 	hint := ""
