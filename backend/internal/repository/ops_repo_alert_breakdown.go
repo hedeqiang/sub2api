@@ -15,10 +15,11 @@ const opsAlertBreakdownTimeout = 3 * time.Second
 
 // GetAlertErrorBreakdown 在 [start,end) 窗口内回查 ops_error_logs,聚合业务维度明细:
 // 窗口请求总数 / 4xx-5xx 拆分 / 平台分布 / Top 用户(含各自错误构成) / Top 错误类型 /
-// Top 上游(平台·渠道名·模型) / 样例报错。错误口径与 error_rate 一致:status_code>=400
-// 且非业务限流(NOT is_business_limited)。scope 过滤(platform/group)复用 buildErrorWhere /
+// Top 上游(平台·渠道名·模型) / 样例报错。错误口径由 metricType 决定:upstream_error_rate
+// 对齐上游错误率分子(error_owner='provider',含被重试救回的恢复行),其余按 SLA 口径
+// (status_code>=400 且非业务限流)。scope 过滤(platform/group)复用 buildErrorWhere /
 // buildUsageWhere,保证与触发该告警的指标范围一致。
-func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time, topN int) (*service.OpsAlertBreakdown, error) {
+func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *service.OpsDashboardFilter, start, end time.Time, topN int, metricType string) (*service.OpsAlertBreakdown, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("ops repository not initialized")
 	}
@@ -32,27 +33,36 @@ func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *serv
 	ctx, cancel := context.WithTimeout(ctx, opsAlertBreakdownTimeout)
 	defer cancel()
 
-	where, args, _ := buildErrorWhere(filter, start, end, 1)
-	// 追加错误率口径过滤。ops_error_logs 只记录错误,但仍按 SLA 口径排除业务限流与非 4xx/5xx。
-	where += " AND COALESCE(status_code,0) >= 400 AND COALESCE(is_business_limited,false) = false"
+	base, args, _ := buildErrorWhere(filter, start, end, 1)
+	pred := alertBreakdownErrorPredicate(metricType, "")
+	where := base + " AND " + pred // 供 TOP/样例 等子查询复用(按 metricType 口径)
 
-	bd := &service.OpsAlertBreakdown{}
+	bd := &service.OpsAlertBreakdown{MetricType: metricType}
 
-	// 1) 总错误数 + 4xx/5xx 拆分
-	totalQ := `SELECT
-		COUNT(*),
-		COUNT(*) FILTER (WHERE COALESCE(status_code,0) BETWEEN 400 AND 499),
-		COUNT(*) FILTER (WHERE COALESCE(status_code,0) >= 500)
-	FROM ops_error_logs ` + where
-	if err := r.db.QueryRowContext(ctx, totalQ, args...).Scan(&bd.TotalErrors, &bd.Client4xx, &bd.Server5xx); err != nil {
+	// 1) 总错误数 + 4xx/5xx 拆分 + SLA 错误数(分母用)。基线 WHERE 只含时间/scope,口径用 FILTER 表达。
+	statusExpr := alertBreakdownStatusExpr(metricType, "")
+	slaPred := alertBreakdownSLAPredicate("")
+	var slaErrors int64
+	totalQ := fmt.Sprintf(`SELECT
+		COUNT(*) FILTER (WHERE %[1]s),
+		COUNT(*) FILTER (WHERE %[1]s AND %[2]s BETWEEN 400 AND 499),
+		COUNT(*) FILTER (WHERE %[1]s AND %[2]s >= 500),
+		COUNT(*) FILTER (WHERE %[3]s)
+	FROM ops_error_logs %[4]s`, pred, statusExpr, slaPred, base)
+	if err := r.db.QueryRowContext(ctx, totalQ, args...).Scan(&bd.TotalErrors, &bd.Client4xx, &bd.Server5xx, &slaErrors); err != nil {
 		return nil, fmt.Errorf("alert breakdown total: %w", err)
 	}
+	bd.OtherErrors = bd.TotalErrors - bd.Client4xx - bd.Server5xx
+	if bd.OtherErrors < 0 {
+		bd.OtherErrors = 0
+	}
 
-	// 2) 窗口请求总数 = 成功(usage_logs) + SLA 错误。用于在卡片上展示错误率分母。
+	// 2) 窗口请求总数 = 成功(usage_logs) + SLA 错误,与指标分母 requestCountSLA 完全一致。
+	//    严禁用 TotalErrors:upstream 口径下被救回的 200 请求已计入 success,会双计。
 	if success, _, err := r.queryUsageCounts(ctx, filter, start, end); err == nil {
-		bd.WindowRequests = success + bd.TotalErrors
+		bd.WindowRequests = success + slaErrors
 	} else {
-		bd.WindowRequests = bd.TotalErrors
+		bd.WindowRequests = slaErrors
 	}
 
 	// 3) 平台分布
@@ -98,17 +108,26 @@ func (r *opsRepository) GetAlertErrorBreakdown(ctx context.Context, filter *serv
 		_ = rows.Close()
 	}
 
-	// 6) Top 上游(平台 · 渠道名 · 模型);account_id 为空表示未走到选号(客户端错误)。
-	// 与 accounts JOIN 时 created_at 列名歧义,改用带别名 e 的等价 where。
-	upWhere, upArgs, _ := buildErrorWhereAliased(filter, start, end, 1, "e")
-	upWhere += " AND COALESCE(e.status_code,0) >= 400 AND COALESCE(e.is_business_limited,false) = false"
-	upQ := `SELECT COALESCE(e.account_id,0) AS aid, COALESCE(a.name,'') AS aname, COALESCE(e.platform,'') AS pf, COALESCE(e.model,'') AS md, COUNT(*) AS c
-		FROM ops_error_logs e LEFT JOIN accounts a ON a.id = e.account_id ` + upWhere +
-		" GROUP BY aid, aname, pf, md ORDER BY c DESC LIMIT " + fmt.Sprintf("%d", topN)
+	// 6) Top 上游(逐次失败尝试):展开每行 upstream_errors JSONB 数组,按 event.account_id 计数。
+	//    一个请求里失败过 A、B 两个渠道时 A、B 各计一次(请求级只能归到「最后失败」的那个,会漏 A)。
+	//    event 级再排除 429/529(对齐错误率分子,与行级 alertBreakdownErrorPredicate 同口径);
+	//    event 未存 model,故该维度仅到「平台 · 渠道」,Model 留空。account_id 缺失(=0)归「未记录上游渠道」。
+	//    行选择口径沿用 metricType 谓词(带别名 e);与 accounts JOIN 时 created_at 歧义,用带别名 e 的等价 where。
+	upBase, upArgs, _ := buildErrorWhereAliased(filter, start, end, 1, "e")
+	upWhere := upBase + " AND " + alertBreakdownErrorPredicate(metricType, "e.")
+	upQ := `SELECT COALESCE(NULLIF(ev->>'account_id','')::bigint, 0) AS aid,
+			COALESCE(a.name, '') AS aname,
+			COALESCE(ev->>'platform', '') AS pf,
+			COUNT(*) AS c
+		FROM ops_error_logs e
+		CROSS JOIN LATERAL jsonb_array_elements(COALESCE(e.upstream_errors, '[]'::jsonb)) AS ev
+		LEFT JOIN accounts a ON a.id = NULLIF(ev->>'account_id','')::bigint ` + upWhere +
+		` AND COALESCE(NULLIF(ev->>'upstream_status_code','')::int, 0) NOT IN (429,529)
+		GROUP BY aid, aname, pf ORDER BY c DESC LIMIT ` + fmt.Sprintf("%d", topN)
 	if rows, err := r.db.QueryContext(ctx, upQ, upArgs...); err == nil {
 		for rows.Next() {
 			var up service.OpsAlertUpstreamStat
-			if err := rows.Scan(&up.AccountID, &up.AccountName, &up.Platform, &up.Model, &up.Count); err == nil {
+			if err := rows.Scan(&up.AccountID, &up.AccountName, &up.Platform, &up.Count); err == nil {
 				bd.TopUpstreams = append(bd.TopUpstreams, up)
 			}
 		}
@@ -244,4 +263,30 @@ func buildErrorWhereAliased(filter *service.OpsDashboardFilter, start, end time.
 
 	where = "WHERE " + strings.Join(clauses, " AND ")
 	return where, args, idx
+}
+
+// alertBreakdownErrorPredicate 返回指定指标口径的错误过滤谓词(不含前导 AND)。
+// prefix 为 "" 或 "e."(JOIN 别名场景)。upstream 口径逐字对齐 queryErrorCounts 的 upstreamExcl。
+func alertBreakdownErrorPredicate(metricType, prefix string) string {
+	p := prefix
+	if strings.EqualFold(strings.TrimSpace(metricType), "upstream_error_rate") {
+		return fmt.Sprintf("%serror_owner='provider' AND NOT %sis_business_limited AND COALESCE(%supstream_status_code,%sstatus_code,0) NOT IN (429,529)", p, p, p, p)
+	}
+	return fmt.Sprintf("COALESCE(%sstatus_code,0)>=400 AND COALESCE(%sis_business_limited,false)=false", p, p)
+}
+
+// alertBreakdownStatusExpr 返回 4xx/5xx 归类用的状态码表达式。
+// upstream 口径基于 COALESCE(upstream_status_code,status_code,0)(恢复行 status=200 不会落入 4xx/5xx),其余基于 status_code。
+func alertBreakdownStatusExpr(metricType, prefix string) string {
+	p := prefix
+	if strings.EqualFold(strings.TrimSpace(metricType), "upstream_error_rate") {
+		return fmt.Sprintf("COALESCE(%supstream_status_code,%sstatus_code,0)", p, p)
+	}
+	return fmt.Sprintf("COALESCE(%sstatus_code,0)", p)
+}
+
+// alertBreakdownSLAPredicate 返回 SLA 错误谓词(分母用,口径无关),逐字对齐指标 errorCountSLA。
+func alertBreakdownSLAPredicate(prefix string) string {
+	p := prefix
+	return fmt.Sprintf("COALESCE(%sstatus_code,0)>=400 AND NOT %sis_business_limited", p, p)
 }
