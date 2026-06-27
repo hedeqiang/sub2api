@@ -57,3 +57,24 @@ func (s *OpsService) GetErrorDistribution(ctx context.Context, filter *OpsDashbo
 	}
 	return result, err
 }
+
+// GetErrorBreakdown 返回某维度下错误数 Top-N 排行（仅 raw 路径，无 preagg 回退）。
+// dimension 白名单由仓库层守门；非法 dimension 返回普通 error。
+func (s *OpsService) GetErrorBreakdown(ctx context.Context, filter *OpsDashboardFilter, dimension string, limit int) (*OpsErrorBreakdownResponse, error) {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if s.opsRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+	}
+	if filter == nil {
+		return nil, infraerrors.BadRequest("OPS_FILTER_REQUIRED", "filter is required")
+	}
+	if filter.StartTime.IsZero() || filter.EndTime.IsZero() {
+		return nil, infraerrors.BadRequest("OPS_TIME_RANGE_REQUIRED", "start_time/end_time are required")
+	}
+	if filter.StartTime.After(filter.EndTime) {
+		return nil, infraerrors.BadRequest("OPS_TIME_RANGE_INVALID", "start_time must be <= end_time")
+	}
+	return s.opsRepo.GetErrorBreakdown(ctx, filter, dimension, limit)
+}
