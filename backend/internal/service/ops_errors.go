@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -77,4 +78,30 @@ func (s *OpsService) GetErrorBreakdown(ctx context.Context, filter *OpsDashboard
 		return nil, infraerrors.BadRequest("OPS_TIME_RANGE_INVALID", "start_time must be <= end_time")
 	}
 	return s.opsRepo.GetErrorBreakdown(ctx, filter, dimension, limit)
+}
+
+// GetErrorTrendByDim 返回某维度下「逐时间桶 × Top-N 键」的错误计数长表（仅 raw 路径）。
+// dimension 白名单由仓库层守门；非法 dimension 返回普通 error。
+func (s *OpsService) GetErrorTrendByDim(ctx context.Context, filter *OpsDashboardFilter, dimension string, bucketSeconds, limit int) (*OpsErrorTrendByDimResponse, error) {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if s.opsRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+	}
+	if filter == nil {
+		return nil, infraerrors.BadRequest("OPS_FILTER_REQUIRED", "filter is required")
+	}
+	if filter.StartTime.IsZero() || filter.EndTime.IsZero() {
+		return nil, infraerrors.BadRequest("OPS_TIME_RANGE_REQUIRED", "start_time/end_time are required")
+	}
+	if filter.StartTime.After(filter.EndTime) {
+		return nil, infraerrors.BadRequest("OPS_TIME_RANGE_INVALID", "start_time must be <= end_time")
+	}
+	resp, err := s.opsRepo.GetErrorTrendByDim(ctx, filter, dimension, bucketSeconds, limit)
+	if err != nil && strings.Contains(err.Error(), "unknown dimension") {
+		// 非法 dimension 是客户端错误（白名单由仓库层守门），映射为 400 而非 500。
+		return nil, infraerrors.BadRequest("OPS_DIMENSION_INVALID", err.Error())
+	}
+	return resp, err
 }
