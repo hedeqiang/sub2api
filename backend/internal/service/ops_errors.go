@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -97,5 +98,10 @@ func (s *OpsService) GetErrorTrendByDim(ctx context.Context, filter *OpsDashboar
 	if filter.StartTime.After(filter.EndTime) {
 		return nil, infraerrors.BadRequest("OPS_TIME_RANGE_INVALID", "start_time must be <= end_time")
 	}
-	return s.opsRepo.GetErrorTrendByDim(ctx, filter, dimension, bucketSeconds, limit)
+	resp, err := s.opsRepo.GetErrorTrendByDim(ctx, filter, dimension, bucketSeconds, limit)
+	if err != nil && strings.Contains(err.Error(), "unknown dimension") {
+		// 非法 dimension 是客户端错误（白名单由仓库层守门），映射为 400 而非 500。
+		return nil, infraerrors.BadRequest("OPS_DIMENSION_INVALID", err.Error())
+	}
+	return resp, err
 }

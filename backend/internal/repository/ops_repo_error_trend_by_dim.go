@@ -44,7 +44,9 @@ func buildErrorTrendByDimQuery(dimension, where, bucketExpr string, limitArgInde
 	b.WriteString("),\n")
 	b.WriteString("agg AS (\n")
 	b.WriteString("  SELECT " + bucketExpr + " AS bucket,\n")
-	b.WriteString("         CASE WHEN " + dim.keyExpr + " IN (SELECT k FROM topn) THEN COALESCE(" + dim.keyExpr + "::text, '') ELSE '__others__' END AS key,\n")
+	// NULL 键(如未鉴权请求 user_id IS NULL)的归类:用 IS NOT DISTINCT FROM 让 NULL=NULL 成立,
+	// 否则 `NULL IN (SELECT k FROM topn)` 恒为 NULL→落入 ELSE,即便 NULL 组本身是 Top-N 也会被吞进其它。
+	b.WriteString("         CASE WHEN EXISTS (SELECT 1 FROM topn WHERE k IS NOT DISTINCT FROM " + dim.keyExpr + ") THEN COALESCE(" + dim.keyExpr + "::text, '') ELSE '__others__' END AS key,\n")
 	b.WriteString("         COUNT(*) FILTER (WHERE " + errFilter + ") AS total,\n")
 	b.WriteString("         COUNT(*) FILTER (WHERE " + errFilter + " AND NOT is_business_limited) AS sla,\n")
 	b.WriteString("         COUNT(*) FILTER (WHERE " + errFilter + " AND is_business_limited) AS business_limited\n")
