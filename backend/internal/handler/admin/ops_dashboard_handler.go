@@ -341,7 +341,7 @@ func parseOpsBreakdownLimit(raw string) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 || n > 100 {
-		return 0, fmt.Errorf("Invalid limit")
+		return 0, fmt.Errorf("invalid limit")
 	}
 	return n, nil
 }

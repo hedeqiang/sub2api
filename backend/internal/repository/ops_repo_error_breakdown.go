@@ -108,20 +108,20 @@ func buildErrorBreakdownQuery(dimension, where string, limitArgIndex int) (items
 	}
 
 	var b strings.Builder
-	b.WriteString("WITH g AS (\n")
-	b.WriteString("  SELECT " + dim.keyExpr + " AS k,\n")
-	b.WriteString("         COUNT(*) AS total,\n")
-	b.WriteString("         COUNT(*) FILTER (WHERE NOT is_business_limited) AS sla,\n")
-	b.WriteString("         COUNT(*) FILTER (WHERE is_business_limited) AS business_limited\n")
-	b.WriteString("  FROM ops_error_logs\n  " + where + "\n")
-	b.WriteString("    AND COALESCE(status_code, 0) >= 400\n")
-	b.WriteString("  GROUP BY 1\n)\n")
+	_, _ = b.WriteString("WITH g AS (\n")
+	_, _ = b.WriteString("  SELECT " + dim.keyExpr + " AS k,\n")
+	_, _ = b.WriteString("         COUNT(*) AS total,\n")
+	_, _ = b.WriteString("         COUNT(*) FILTER (WHERE NOT is_business_limited) AS sla,\n")
+	_, _ = b.WriteString("         COUNT(*) FILTER (WHERE is_business_limited) AS business_limited\n")
+	_, _ = b.WriteString("  FROM ops_error_logs\n  " + where + "\n")
+	_, _ = b.WriteString("    AND COALESCE(status_code, 0) >= 400\n")
+	_, _ = b.WriteString("  GROUP BY 1\n)\n")
 	// key 必须 COALESCE：user_id/account_id/platform 等可空列分组会产生 NULL 键，
 	// 而 NULL 扫描进 Go string 会报错。NULL 键统一落为空串。
-	b.WriteString("SELECT COALESCE(g.k::text, '') AS key, " + labelSelect + " AS label, g.total, g.sla, g.business_limited\n")
-	b.WriteString("FROM g " + dim.joinSQL + "\n")
-	b.WriteString("ORDER BY g.total DESC\n")
-	b.WriteString(fmt.Sprintf("LIMIT $%d", limitArgIndex))
+	_, _ = b.WriteString("SELECT COALESCE(g.k::text, '') AS key, " + labelSelect + " AS label, g.total, g.sla, g.business_limited\n")
+	_, _ = b.WriteString("FROM g " + dim.joinSQL + "\n")
+	_, _ = b.WriteString("ORDER BY g.total DESC\n")
+	_, _ = b.WriteString(fmt.Sprintf("LIMIT $%d", limitArgIndex))
 	itemsSQL = b.String()
 
 	totalsSQL = "SELECT COUNT(*) AS total,\n" +
